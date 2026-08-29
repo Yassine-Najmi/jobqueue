@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"sync"
 	"testing"
 )
 
@@ -52,4 +53,33 @@ func TestInMemoryStoreGet(t *testing.T) {
 			t.Fatalf("expected error job not found, got : %v", err)
 		}
 	})
+}
+
+func TestInMemoryStoreRecordAttemptConcurrent(t *testing.T) {
+	store := NewInMemoryStore()
+
+	job, _ := store.Create(Job{Type: "send_email", MaxAttempts: 1000})
+
+	var wg sync.WaitGroup
+
+	for i := 0; i < job.MaxAttempts+1; i++ {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+			store.RecordAttempt(job.ID)
+		}()
+	}
+
+	wg.Wait()
+
+	finalJob, _ := store.Get(job.ID)
+
+	if finalJob.Attempts != job.MaxAttempts {
+		t.Fatalf("expected max attmepts : %v, got : %v", job.MaxAttempts, finalJob.Attempts)
+	}
+
+	if finalJob.Status != "failed" {
+		t.Fatalf("expected the job status : failed, got : %v", finalJob.Status)
+	}
 }
