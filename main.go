@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"math/rand"
 	"sync"
 	"time"
 )
@@ -131,13 +132,13 @@ func (s *InMemoryStore) MarkFailed(id int) error {
 	return nil
 }
 
-func (s *InMemoryStore) RecordAttempt(id int) error {
+func (s *InMemoryStore) RecordAttempt(id int) (Job, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	job, exists := s.jobs[id]
 	if !exists {
-		return fmt.Errorf("increment attempts job %d: %w", id, ErrJobNotFound)
+		return Job{}, fmt.Errorf("increment attempts job %d: %w", id, ErrJobNotFound)
 	}
 
 	if job.Attempts < job.MaxAttempts {
@@ -151,7 +152,49 @@ func (s *InMemoryStore) RecordAttempt(id int) error {
 
 	s.jobs[id] = job
 
+	return job, nil
+}
+
+type JobHandler interface {
+	Handle(job Job) error
+}
+
+type SimulatedHandler struct{}
+
+func (h SimulatedHandler) Handle(job Job) error {
+
+	time.Sleep(500 * time.Millisecond)
+
+	if rand.Intn(2) == 0 {
+		return fmt.Errorf("the simulator failed")
+	}
+
 	return nil
+}
+
+func worker(id int, jobs <-chan Job, retryJobs chan<- Job, store *InMemoryStore, registry map[string]JobHandler) {
+	for job := range jobs {
+		handler := registry[job.Type]
+
+		store.MarkRunning(job.ID)
+
+		err := handler.Handle(job)
+
+		if err != nil {
+			recordJob, recordErr := store.RecordAttempt(job.ID)
+			if recordErr != nil {
+				fmt.Println("worker error:", recordErr)
+				continue
+			}
+
+			if recordJob.Status == "retrying" {
+				time.Sleep(500 * time.Millisecond)
+				retryJobs <- recordJob
+			}
+		} else {
+			store.MarkSuccess(job.ID)
+		}
+	}
 }
 
 func main() {
