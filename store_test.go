@@ -9,7 +9,6 @@ import (
 func TestInMemoryStoreCreate(t *testing.T) {
 	store := NewInMemoryStore()
 
-	// job, err := store.Create(Job{Type: "send_email", Status: "queued"})
 	job, err := store.Create(Job{Type: "send_email"})
 
 	if err != nil {
@@ -55,7 +54,7 @@ func TestInMemoryStoreGet(t *testing.T) {
 	})
 }
 
-func TestInMemoryStoreRecordAttemptConcurrent(t *testing.T) {
+func TestInMemoryStoreRecordAttempt_NoLostUpdatesUnderConcurrency(t *testing.T) {
 	store := NewInMemoryStore()
 
 	job, _ := store.Create(Job{Type: "send_email", MaxAttempts: 1000})
@@ -76,7 +75,7 @@ func TestInMemoryStoreRecordAttemptConcurrent(t *testing.T) {
 	finalJob, _ := store.Get(job.ID)
 
 	if finalJob.Attempts != job.MaxAttempts {
-		t.Fatalf("expected max attmepts : %v, got : %v", job.MaxAttempts, finalJob.Attempts)
+		t.Fatalf("expected max attempts : %v, got : %v", job.MaxAttempts, finalJob.Attempts)
 	}
 
 	if finalJob.Status != "failed" {
