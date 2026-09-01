@@ -9,12 +9,14 @@ func main() {
 	fmt.Println("Job Queue - work in progress")
 
 	jobsChan := make(chan Job, 10)
+	retryJobs := make(chan Job, 10)
 
 	registry := map[string]JobHandler{"simulated": SimulatedHandler{}}
 
 	store := NewInMemoryStore()
 
-	startWorkerPool(3, jobsChan, jobsChan, store, registry)
+	startWorkerPool(3, jobsChan, retryJobs, store, registry)
+	go retryDispatcher(retryJobs, jobsChan)
 
 	for i := 0; i < 5; i++ {
 		job, err := store.Create(Job{Type: "simulated", MaxAttempts: 3})
