@@ -33,7 +33,7 @@ func NewInMemoryStore() *InMemoryStore {
 }
 
 func (s *InMemoryStore) generateID() int {
-	// s.nextID++
+	s.nextID++
 	return s.nextID
 }
 
