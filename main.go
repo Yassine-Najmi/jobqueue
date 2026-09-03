@@ -1,12 +1,21 @@
 package main
 
 import (
-	"fmt"
-	"time"
+	"log"
+	"net/http"
 )
 
+func newRouter(store *InMemoryStore, registry map[string]JobHandler, jobChan chan<- Job) http.Handler {
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("POST /jobs", handleCreateJob(store, registry, jobChan))
+	mux.HandleFunc("GET /jobs", handleListJobs(store))
+	mux.HandleFunc("GET /jobs/{id}", handleGetJob(store))
+
+	return loggingMiddleware(mux)
+}
+
 func main() {
-	fmt.Println("Job Queue - work in progress")
 
 	jobsChan := make(chan Job, 10)
 	retryJobs := make(chan Job, 10)
@@ -18,14 +27,15 @@ func main() {
 	startWorkerPool(3, jobsChan, retryJobs, store, registry)
 	go retryDispatcher(retryJobs, jobsChan)
 
-	for i := 0; i < 5; i++ {
-		job, err := store.Create(Job{Type: "simulated", MaxAttempts: 3})
-		if err != nil {
-			fmt.Printf("job creation error: %v\n", err)
-			continue
-		}
-		jobsChan <- job
+	router := newRouter(store, registry, jobsChan)
+
+	server := http.Server{
+		Addr:    ":8080",
+		Handler: router,
 	}
 
-	time.Sleep(5 * time.Second)
+	log.Println("server listening on :8080")
+
+	err := server.ListenAndServe()
+	log.Fatal(err)
 }

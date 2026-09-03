@@ -24,7 +24,6 @@ func handleCreateJob(store *InMemoryStore, registry map[string]JobHandler, jobCh
 				sb.WriteString(err.Error())
 				sb.WriteString("\n")
 			}
-
 			http.Error(w, sb.String(), http.StatusBadRequest)
 			return
 		}
@@ -45,7 +44,6 @@ func handleCreateJob(store *InMemoryStore, registry map[string]JobHandler, jobCh
 func handleGetJob(store *InMemoryStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.Atoi(r.PathValue("id"))
-
 		if err != nil {
 			http.Error(w, "the id wasn't a valid integer", http.StatusBadRequest)
 			return
@@ -56,12 +54,22 @@ func handleGetJob(store *InMemoryStore) http.HandlerFunc {
 			http.Error(w, fmt.Sprint(ErrJobNotFound), http.StatusNotFound)
 			return
 		}
-
 		if err != nil {
 			http.Error(w, "server error", http.StatusInternalServerError)
 			return
 		}
 
 		json.NewEncoder(w).Encode(job)
+	}
+}
+
+func handleListJobs(store *InMemoryStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		jobs, err := store.GetAll()
+		if err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(jobs)
 	}
 }
