@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sync"
 	"time"
 )
 
@@ -39,9 +40,11 @@ func worker(id int, jobs <-chan Job, retryJobs chan<- Job, store *InMemoryStore,
 	}
 }
 
-func startWorkerPool(numWorkers int, jobs chan Job, retryJobs chan Job, store *InMemoryStore, registry map[string]JobHandler) {
+func startWorkerPool(numWorkers int, jobs chan Job, retryJobs chan Job, store *InMemoryStore, registry map[string]JobHandler, wg *sync.WaitGroup) {
+	wg.Add(numWorkers)
 	for i := 0; i < numWorkers; i++ {
 		go func(workerID int) {
+			defer wg.Done()
 			worker(workerID, jobs, retryJobs, store, registry)
 		}(i)
 	}

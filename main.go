@@ -1,8 +1,14 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 )
 
 func newRouter(store *InMemoryStore, registry map[string]JobHandler, jobChan chan<- Job) http.Handler {
@@ -16,6 +22,10 @@ func newRouter(store *InMemoryStore, registry map[string]JobHandler, jobChan cha
 }
 
 func main() {
+	var wg sync.WaitGroup
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	jobsChan := make(chan Job, 10)
 	retryJobs := make(chan Job, 10)
@@ -24,7 +34,7 @@ func main() {
 
 	store := NewInMemoryStore()
 
-	startWorkerPool(3, jobsChan, retryJobs, store, registry)
+	startWorkerPool(3, jobsChan, retryJobs, store, registry, &wg)
 	go retryDispatcher(retryJobs, jobsChan)
 
 	router := newRouter(store, registry, jobsChan)
@@ -34,8 +44,20 @@ func main() {
 		Handler: router,
 	}
 
-	log.Println("server listening on :8080")
+	go func() {
+		<-ctx.Done()
+		log.Println("shutdown signal received, stopping server")
+		server.Shutdown(context.Background())
+		close(jobsChan)
+	}()
 
+	log.Println("server listening on :8080")
 	err := server.ListenAndServe()
-	log.Fatal(err)
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Println("server error:", err)
+	}
+
+	log.Println("waiting for in-flight jobs to finish...")
+	wg.Wait()
+	log.Println("shutdown complete")
 }
