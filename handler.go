@@ -19,7 +19,7 @@ type JobHandler interface {
 type SimulatedHandler struct{}
 
 func (h SimulatedHandler) Handle(job Job) error {
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(8 * time.Second)
 
 	if rand.Intn(2) == 0 {
 		return fmt.Errorf("the simulator failed")

@@ -22,20 +22,25 @@ func newRouter(store *InMemoryStore, registry map[string]JobHandler, jobChan cha
 }
 
 func main() {
-	var wg sync.WaitGroup
+	var workerWg sync.WaitGroup
+	var dispatcherWg sync.WaitGroup
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	jobsChan := make(chan Job, 10)
 	retryJobs := make(chan Job, 10)
+	shutdownDone := make(chan struct{})
 
 	registry := map[string]JobHandler{"simulated": SimulatedHandler{}}
 
 	store := NewInMemoryStore()
 
-	startWorkerPool(3, jobsChan, retryJobs, store, registry, &wg)
-	go retryDispatcher(retryJobs, jobsChan)
+	startWorkerPool(3, jobsChan, retryJobs, store, registry, &workerWg)
+	func() {
+		dispatcherWg.Add(1)
+		go retryDispatcher(ctx, retryJobs, jobsChan, &dispatcherWg)
+	}()
 
 	router := newRouter(store, registry, jobsChan)
 
@@ -49,6 +54,10 @@ func main() {
 		log.Println("shutdown signal received, stopping server")
 		server.Shutdown(context.Background())
 		close(jobsChan)
+		workerWg.Wait()
+		close(retryJobs)
+		dispatcherWg.Wait()
+		close(shutdownDone)
 	}()
 
 	log.Println("server listening on :8080")
@@ -58,6 +67,6 @@ func main() {
 	}
 
 	log.Println("waiting for in-flight jobs to finish...")
-	wg.Wait()
+	<-shutdownDone
 	log.Println("shutdown complete")
 }
