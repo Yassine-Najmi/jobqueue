@@ -30,17 +30,15 @@ func main() {
 
 	jobsChan := make(chan Job, 10)
 	retryJobs := make(chan Job, 10)
-	shutdownDone := make(chan struct{})
 
 	registry := map[string]JobHandler{"simulated": SimulatedHandler{}}
 
 	store := NewInMemoryStore()
 
-	startWorkerPool(3, jobsChan, retryJobs, store, registry, &workerWg)
-	func() {
-		dispatcherWg.Add(1)
-		go retryDispatcher(ctx, retryJobs, jobsChan, &dispatcherWg)
-	}()
+	startWorkerPool(ctx, 3, jobsChan, retryJobs, store, registry, &workerWg)
+
+	dispatcherWg.Add(1)
+	go retryDispatcher(ctx, retryJobs, jobsChan, &dispatcherWg)
 
 	router := newRouter(store, registry, jobsChan)
 
@@ -53,11 +51,6 @@ func main() {
 		<-ctx.Done()
 		log.Println("shutdown signal received, stopping server")
 		server.Shutdown(context.Background())
-		close(jobsChan)
-		workerWg.Wait()
-		close(retryJobs)
-		dispatcherWg.Wait()
-		close(shutdownDone)
 	}()
 
 	log.Println("server listening on :8080")
@@ -67,6 +60,7 @@ func main() {
 	}
 
 	log.Println("waiting for in-flight jobs to finish...")
-	<-shutdownDone
+	workerWg.Wait()
+	dispatcherWg.Wait()
 	log.Println("shutdown complete")
 }

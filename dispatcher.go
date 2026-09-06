@@ -10,13 +10,18 @@ import (
 // never does real work (no Handle calls), so it's always available to
 // receive — meaning a worker sending onto retries never blocks waiting
 // for a busy worker, only for this always-ready dispatcher.
-func retryDispatcher(ctx context.Context, retries <-chan Job, jobs chan<- Job, dispatcherWg *sync.WaitGroup) {
-	defer dispatcherWg.Done()
-	for retriedJob := range retries {
+func retryDispatcher(ctx context.Context, retries <-chan Job, jobs chan<- Job, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for {
 		select {
-		case jobs <- retriedJob:
 		case <-ctx.Done():
 			return
+		case retriedJob := <-retries:
+			select {
+			case jobs <- retriedJob:
+			case <-ctx.Done():
+				return
+			}
 		}
 	}
 }
