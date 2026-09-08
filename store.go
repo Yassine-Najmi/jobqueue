@@ -18,6 +18,8 @@ type Job struct {
 	MaxAttempts int            `json:"max_attempts"`
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
+	ClaimedAt   *time.Time     `json:"claimed_at,omitempty"`
+	ClaimedBy   string         `json:"claimed_by,omitempty"`
 }
 
 type InMemoryStore struct {
