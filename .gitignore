@@ -3,3 +3,4 @@ jobqueue
 *.test
 *.out
 *.db
+.env
