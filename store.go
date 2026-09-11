@@ -1,8 +1,11 @@
 package main
 
 import (
+	"errors"
 	"time"
 )
+
+var ErrJobNotFound = errors.New("job not found")
 
 type Job struct {
 	ID          int            `json:"id"`

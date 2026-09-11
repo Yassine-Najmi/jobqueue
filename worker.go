@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func worker(ctx context.Context, id int, jobs <-chan Job, retryJobs chan<- Job, store *InMemoryStore, registry map[string]JobHandler) {
+func worker(ctx context.Context, id int, jobs <-chan Job, retryJobs chan<- Job, store Storage, registry map[string]JobHandler) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -56,7 +56,7 @@ func worker(ctx context.Context, id int, jobs <-chan Job, retryJobs chan<- Job, 
 	}
 }
 
-func startWorkerPool(ctx context.Context, numWorkers int, jobs chan Job, retryJobs chan Job, store *InMemoryStore, registry map[string]JobHandler, workerWg *sync.WaitGroup) {
+func startWorkerPool(ctx context.Context, numWorkers int, jobs chan Job, retryJobs chan Job, store Storage, registry map[string]JobHandler, workerWg *sync.WaitGroup) {
 	workerWg.Add(numWorkers)
 	for i := 0; i < numWorkers; i++ {
 		go func(workerID int) {

@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-func handleCreateJob(store *InMemoryStore, registry map[string]JobHandler, jobChan chan<- Job) http.HandlerFunc {
+func handleCreateJob(store Storage, registry map[string]JobHandler, jobChan chan<- Job) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var job Job
 
@@ -41,7 +41,7 @@ func handleCreateJob(store *InMemoryStore, registry map[string]JobHandler, jobCh
 	}
 }
 
-func handleGetJob(store *InMemoryStore) http.HandlerFunc {
+func handleGetJob(store Storage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
@@ -63,7 +63,7 @@ func handleGetJob(store *InMemoryStore) http.HandlerFunc {
 	}
 }
 
-func handleListJobs(store *InMemoryStore) http.HandlerFunc {
+func handleListJobs(store Storage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		jobs, err := store.GetAll()
 		if err != nil {

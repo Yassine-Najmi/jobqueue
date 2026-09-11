@@ -1,13 +1,10 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 	"time"
 )
-
-var ErrJobNotFound = errors.New("job not found")
 
 type InMemoryStore struct {
 	jobs   map[int]Job
