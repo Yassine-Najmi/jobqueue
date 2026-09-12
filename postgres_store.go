@@ -52,11 +52,11 @@ func (s *PostgresStore) Create(job Job) (Job, error) {
 func (s *PostgresStore) Get(id int) (Job, error) {
 	var job Job
 	var payloadJSON []byte
-	query := `SELECT * FROM jobs
+	query := `SELECT id, type, payload, status, attempts, max_attempts, created_at, updated_at, claimed_at, claimed_by FROM jobs
 	WHERE id = $1
 	`
 
-	err := s.db.QueryRow(query).Scan(&job.ID, &job.Type, &payloadJSON, &job.Status, &job.Attempts, &job.MaxAttempts)
+	err := s.db.QueryRow(query, id).Scan(&job.ID, &job.Type, &payloadJSON, &job.Status, &job.Attempts, &job.MaxAttempts, &job.CreatedAt, &job.UpdatedAt, &job.ClaimedAt, &job.ClaimedBy)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Job{}, fmt.Errorf("get job %v : %w", id, ErrJobNotFound)

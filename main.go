@@ -43,10 +43,6 @@ func main() {
 		os.Getenv("DB_NAME"),
 	)
 
-	fmt.Println("USER:", os.Getenv("DB_USER"))
-	fmt.Println("PASSWORD:", os.Getenv("DB_PASSWORD"))
-	fmt.Println("DB:", os.Getenv("DB_NAME"))
-
 	store, err := NewPostgresStore(connString)
 	if err != nil {
 		log.Fatal(err)
@@ -69,6 +65,13 @@ func main() {
 		log.Fatal(err)
 	}
 	fmt.Printf("%v\n", createdJob)
+
+	getJob, err := store.Get(3)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("%v\n", getJob)
 
 	// startWorkerPool(ctx, 3, jobsChan, retryJobs, store, registry, &workerWg)
 
