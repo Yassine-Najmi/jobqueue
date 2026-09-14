@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -23,8 +24,23 @@ func newRouter(store Storage, registry map[string]JobHandler, jobChan chan<- Job
 	return loggingMiddleware(mux)
 }
 
+func newStore() (Storage, error) {
+	godotenv.Load()
+
+	if os.Getenv("STORE_TYPE") != "postgres" {
+		return NewInMemoryStore(), nil
+	}
+
+	connString := fmt.Sprintf("postgres://%s:%s@localhost:5432/%s?sslmode=disable",
+		os.Getenv("DB_USER"),
+		os.Getenv("DB_PASSWORD"),
+		os.Getenv("DB_NAME"),
+	)
+	return NewPostgresStore(connString)
+}
+
 func main() {
-	// var workerWg sync.WaitGroup
+	var workerWg sync.WaitGroup
 	var dispatcherWg sync.WaitGroup
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -33,72 +49,39 @@ func main() {
 	jobsChan := make(chan Job, 10)
 	retryJobs := make(chan Job, 10)
 
-	// registry := map[string]JobHandler{"simulated": SimulatedHandler{}}
+	registry := map[string]JobHandler{"simulated": SimulatedHandler{}}
 
-	// store := NewInMemoryStore()
-	godotenv.Load()
-	connString := fmt.Sprintf("postgres://%s:%s@localhost:5432/%s?sslmode=disable",
-		os.Getenv("DB_USER"),
-		os.Getenv("DB_PASSWORD"),
-		os.Getenv("DB_NAME"),
-	)
-
-	store, err := NewPostgresStore(connString)
+	store, err := newStore()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	job := Job{
-		Type: "email",
-		Payload: map[string]any{
-			"to":      "test@example.com",
-			"subject": "Hello",
-		},
-		Status:      "whatever",
-		Attempts:    99,
-		MaxAttempts: 3,
-	}
-
-	createdJob, err := store.Create(job)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("%v\n", createdJob)
-
-	getJob, err := store.Get(3)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Printf("%v\n", getJob)
-
-	// startWorkerPool(ctx, 3, jobsChan, retryJobs, store, registry, &workerWg)
+	startWorkerPool(ctx, 3, jobsChan, retryJobs, store, registry, &workerWg)
 
 	dispatcherWg.Add(1)
 	go retryDispatcher(ctx, retryJobs, jobsChan, &dispatcherWg)
 
-	// router := newRouter(store, registry, jobsChan)
+	router := newRouter(store, registry, jobsChan)
 
-	// server := http.Server{
-	// 	Addr:    ":8080",
-	// 	Handler: router,
-	// }
+	server := http.Server{
+		Addr:    ":8080",
+		Handler: router,
+	}
 
-	// go func() {
-	// 	<-ctx.Done()
-	// 	log.Println("shutdown signal received, stopping server")
-	// 	server.Shutdown(context.Background())
-	// }()
+	go func() {
+		<-ctx.Done()
+		log.Println("shutdown signal received, stopping server")
+		server.Shutdown(context.Background())
+	}()
 
-	// log.Println("server listening on :8080")
-	// err := server.ListenAndServe()
-	// if err != nil && !errors.Is(err, http.ErrServerClosed) {
-	// 	log.Println("server error:", err)
-	// }
+	log.Println("server listening on :8080")
+	err = server.ListenAndServe()
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Println("server error:", err)
+	}
 
-	// log.Println("waiting for in-flight jobs to finish...")
-	// workerWg.Wait()
-	// dispatcherWg.Wait()
-	// log.Println("shutdown complete")
+	log.Println("waiting for in-flight jobs to finish...")
+	workerWg.Wait()
+	dispatcherWg.Wait()
+	log.Println("shutdown complete")
 }

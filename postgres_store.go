@@ -77,3 +77,19 @@ func (s *PostgresStore) Get(id int) (Job, error) {
 	return job, nil
 
 }
+
+func (s *PostgresStore) GetAll() ([]Job, error) {
+	return []Job{}, nil
+}
+
+func (s *PostgresStore) MarkRunning(id int) error {
+	return nil
+}
+
+func (s *PostgresStore) MarkSuccess(id int) error {
+	return nil
+}
+
+func (s *PostgresStore) RecordAttempt(id int) (Job, error) {
+	return Job{}, nil
+}
