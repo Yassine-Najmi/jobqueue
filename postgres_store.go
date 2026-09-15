@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -79,14 +80,75 @@ func (s *PostgresStore) Get(id int) (Job, error) {
 }
 
 func (s *PostgresStore) GetAll() ([]Job, error) {
-	return []Job{}, nil
+	jobs := make([]Job, 0)
+
+	query := `SELECT id, type, payload, status, attempts, max_attempts, created_at, updated_at, claimed_at, claimed_by FROM jobs`
+
+	rows, err := s.db.Query(query)
+	if err != nil {
+		return jobs, fmt.Errorf("get all jobs : %w", err)
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var job Job
+		var claimedBy sql.NullString
+		var payloadJSON []byte
+
+		if err := rows.Scan(&job.ID, &job.Type, &payloadJSON, &job.Status, &job.Attempts, &job.MaxAttempts, &job.CreatedAt, &job.UpdatedAt, &job.ClaimedAt, &claimedBy); err != nil {
+			return jobs, fmt.Errorf("get all tasks : %w", err)
+		}
+
+		if claimedBy.Valid {
+			job.ClaimedBy = claimedBy.String
+		}
+
+		err := json.Unmarshal(payloadJSON, &job.Payload)
+		if err != nil {
+			return jobs, fmt.Errorf("unmarshal payload error : %w", err)
+		}
+
+		jobs = append(jobs, job)
+	}
+
+	return jobs, nil
 }
 
 func (s *PostgresStore) MarkRunning(id int) error {
+
+	query := `UPDATE jobs SET status = $1, updated_at = $2 WHERE id = $3`
+
+	result, err := s.db.Exec(query, "running", time.Now(), id)
+	if err != nil {
+		return fmt.Errorf("mark running error : %w", err)
+	}
+
+	rowEffected, rowErr := result.RowsAffected()
+	if rowErr != nil {
+		return fmt.Errorf("row effected error : %w", rowErr)
+	} else if rowEffected == 0 {
+		return fmt.Errorf("update markRunning job %d : %w", id, ErrJobNotFound)
+	}
 	return nil
 }
 
 func (s *PostgresStore) MarkSuccess(id int) error {
+
+	query := `UPDATE jobs SET status = $1, updated_at = $2 WHERE id = $3`
+
+	result, err := s.db.Exec(query, "success", time.Now(), id)
+	if err != nil {
+		return fmt.Errorf("mark success error : %w", err)
+	}
+
+	rowEffected, rowErr := result.RowsAffected()
+	if rowErr != nil {
+		return fmt.Errorf("row effected error : %w", rowErr)
+	} else if rowEffected == 0 {
+		return fmt.Errorf("update markSuccess job %d : %w", id, ErrJobNotFound)
+	}
+
 	return nil
 }
 
