@@ -153,5 +153,39 @@ func (s *PostgresStore) MarkSuccess(id int) error {
 }
 
 func (s *PostgresStore) RecordAttempt(id int) (Job, error) {
-	return Job{}, nil
+	var job Job
+	var claimedBy sql.NullString
+	var payloadJSON []byte
+
+	query := `UPDATE jobs
+	SET attempts = CASE
+	WHEN attempts >= max_attempts THEN attempts
+	ELSE attempts + 1
+	END,
+	status = CASE
+	WHEN attempts >= max_attempts THEN 'failed'
+	ELSE 'retrying'
+	END,
+	updated_at = $1
+	WHERE id = $2
+	RETURNING *
+	`
+	err := s.db.QueryRow(query, time.Now(), id).Scan(&job.ID, &job.Type, &payloadJSON, &job.Status, &job.Attempts, &job.MaxAttempts, &job.CreatedAt, &job.UpdatedAt, &job.ClaimedAt, &claimedBy)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Job{}, fmt.Errorf("record attempt job %d : %w", id, ErrJobNotFound)
+		}
+		return Job{}, fmt.Errorf("record attempt job %d : %w", id, err)
+	}
+
+	if claimedBy.Valid {
+		job.ClaimedBy = claimedBy.String
+	}
+
+	err = json.Unmarshal(payloadJSON, &job.Payload)
+	if err != nil {
+		return Job{}, fmt.Errorf("unmarshal error : %w", err)
+	}
+
+	return job, nil
 }
