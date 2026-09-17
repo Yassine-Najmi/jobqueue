@@ -189,3 +189,45 @@ func (s *PostgresStore) RecordAttempt(id int) (Job, error) {
 
 	return job, nil
 }
+
+func (s *PostgresStore) ClaimJob(workerID string) (Job, error) {
+
+	var job Job
+	var claimedBy sql.NullString
+	var payloadJSON []byte
+
+	query := `
+	UPDATE jobs SET
+	status = 'running',
+	updated_at = $1,
+	claimed_at = $2,
+	claimed_by = $3
+	WHERE id = (
+		SELECT id FROM jobs
+		WHERE status IN ('queued', 'retrying')
+		ORDER BY created_at
+		LIMIT 1
+		FOR UPDATE SKIP LOCKED
+		)
+		RETURNING *
+	`
+	err := s.db.QueryRow(query, time.Now(), time.Now(), workerID).Scan(&job.ID, &job.Type, &payloadJSON, &job.Status, &job.Attempts, &job.MaxAttempts, &job.CreatedAt, &job.UpdatedAt, &job.ClaimedAt, &claimedBy)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Job{}, ErrNoJobAvailable
+		}
+		return Job{}, fmt.Errorf("claim job error : %w", err)
+	}
+
+	if claimedBy.Valid {
+		job.ClaimedBy = claimedBy.String
+	}
+
+	err = json.Unmarshal(payloadJSON, &job.Payload)
+	if err != nil {
+		return Job{}, fmt.Errorf("unmarshal error : %w", err)
+	}
+
+	return job, nil
+}

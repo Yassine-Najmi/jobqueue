@@ -6,6 +6,7 @@ import (
 )
 
 var ErrJobNotFound = errors.New("job not found")
+var ErrNoJobAvailable = errors.New("no job available")
 
 type Job struct {
 	ID          int            `json:"id"`
