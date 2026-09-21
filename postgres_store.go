@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -230,4 +231,52 @@ func (s *PostgresStore) ClaimJob(workerID string) (Job, error) {
 	}
 
 	return job, nil
+}
+
+func (s *PostgresStore) RecoverOrphanedJobs() (int, error) {
+
+	query := `
+	UPDATE jobs SET
+	attempts = CASE
+	WHEN attempts >= max_attempts THEN attempts
+	ELSE attempts + 1
+	END,
+	status = CASE
+	WHEN attempts >= max_attempts THEN 'failed'
+	ELSE 'retrying'
+	END,
+	updated_at = $1
+	WHERE  id IN (
+		SELECT id FROM jobs
+		WHERE status = 'running'
+		ORDER BY created_at
+		FOR UPDATE SKIP LOCKED
+	)
+	RETURNING id
+	`
+	rows, err := s.db.Query(query, time.Now())
+	if err != nil {
+		return -1, fmt.Errorf("Recover orphaned jobs error : %w", err)
+	}
+
+	defer rows.Close()
+
+	var count int
+
+	for rows.Next() {
+		var id int
+
+		if err := rows.Scan(&id); err != nil {
+			log.Printf("recover a job error : %v", err)
+			continue
+		}
+		count++
+
+	}
+
+	if err := rows.Err(); err != nil {
+		return -1, fmt.Errorf("iterate recovered jobs: %w", err)
+	}
+
+	return count, nil
 }
