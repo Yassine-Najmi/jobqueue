@@ -56,6 +56,15 @@ func main() {
 		log.Fatal(err)
 	}
 
+	if pgStore, ok := store.(*PostgresStore); ok {
+		count, err := pgStore.RecoverOrphanedJobs()
+		if err != nil {
+			log.Printf("Failed to recover orphaned jobs : %v", err)
+		} else {
+			log.Printf("Recovered %d orphaned jobs", count)
+		}
+	}
+
 	startWorkerPool(ctx, 3, jobsChan, retryJobs, store, registry, &workerWg)
 
 	dispatcherWg.Add(1)
