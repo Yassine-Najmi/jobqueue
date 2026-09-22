@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -249,14 +248,12 @@ func (s *PostgresStore) RecoverOrphanedJobs() (int, error) {
 	WHERE  id IN (
 		SELECT id FROM jobs
 		WHERE status = 'running'
-		ORDER BY created_at
-		FOR UPDATE SKIP LOCKED
 	)
 	RETURNING id
 	`
 	rows, err := s.db.Query(query, time.Now())
 	if err != nil {
-		return -1, fmt.Errorf("Recover orphaned jobs error : %w", err)
+		return 0, fmt.Errorf("Recover orphaned jobs error : %w", err)
 	}
 
 	defer rows.Close()
@@ -267,15 +264,14 @@ func (s *PostgresStore) RecoverOrphanedJobs() (int, error) {
 		var id int
 
 		if err := rows.Scan(&id); err != nil {
-			log.Printf("recover a job error : %v", err)
-			continue
+			return 0, fmt.Errorf("recover a job error : %w", err)
 		}
 		count++
 
 	}
 
 	if err := rows.Err(); err != nil {
-		return -1, fmt.Errorf("iterate recovered jobs: %w", err)
+		return 0, fmt.Errorf("iterate recovered jobs: %w", err)
 	}
 
 	return count, nil
