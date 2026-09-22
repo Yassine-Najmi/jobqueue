@@ -34,7 +34,9 @@ func handleCreateJob(store Storage, registry map[string]JobHandler, jobChan chan
 			return
 		}
 
-		jobChan <- created
+		if _, ok := store.(*PostgresStore); !ok {
+			jobChan <- created
+		}
 
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(created)

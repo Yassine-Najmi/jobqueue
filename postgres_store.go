@@ -166,11 +166,12 @@ func (s *PostgresStore) RecordAttempt(id int) (Job, error) {
 	WHEN attempts >= max_attempts THEN 'failed'
 	ELSE 'retrying'
 	END,
-	updated_at = $1
+	updated_at = $1,
+	available_at = $3
 	WHERE id = $2
 	RETURNING *
 	`
-	err := s.db.QueryRow(query, time.Now(), id).Scan(&job.ID, &job.Type, &payloadJSON, &job.Status, &job.Attempts, &job.MaxAttempts, &job.CreatedAt, &job.UpdatedAt, &job.ClaimedAt, &claimedBy)
+	err := s.db.QueryRow(query, time.Now(), id, time.Now().Add(500*time.Millisecond)).Scan(&job.ID, &job.Type, &payloadJSON, &job.Status, &job.Attempts, &job.MaxAttempts, &job.CreatedAt, &job.UpdatedAt, &job.ClaimedAt, &claimedBy, &job.AvailableAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Job{}, fmt.Errorf("record attempt job %d : %w", id, ErrJobNotFound)
@@ -205,13 +206,14 @@ func (s *PostgresStore) ClaimJob(workerID string) (Job, error) {
 	WHERE id = (
 		SELECT id FROM jobs
 		WHERE status IN ('queued', 'retrying')
+		AND (available_at IS NULL OR available_at < now())
 		ORDER BY created_at
 		LIMIT 1
 		FOR UPDATE SKIP LOCKED
 		)
 		RETURNING *
 	`
-	err := s.db.QueryRow(query, time.Now(), time.Now(), workerID).Scan(&job.ID, &job.Type, &payloadJSON, &job.Status, &job.Attempts, &job.MaxAttempts, &job.CreatedAt, &job.UpdatedAt, &job.ClaimedAt, &claimedBy)
+	err := s.db.QueryRow(query, time.Now(), time.Now(), workerID).Scan(&job.ID, &job.Type, &payloadJSON, &job.Status, &job.Attempts, &job.MaxAttempts, &job.CreatedAt, &job.UpdatedAt, &job.ClaimedAt, &claimedBy, &job.AvailableAt)
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

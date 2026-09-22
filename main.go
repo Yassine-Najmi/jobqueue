@@ -67,8 +67,10 @@ func main() {
 
 	startWorkerPool(ctx, 3, jobsChan, retryJobs, store, registry, &workerWg)
 
-	dispatcherWg.Add(1)
-	go retryDispatcher(ctx, retryJobs, jobsChan, &dispatcherWg)
+	if _, ok := store.(*PostgresStore); !ok {
+		dispatcherWg.Add(1)
+		go retryDispatcher(ctx, retryJobs, jobsChan, &dispatcherWg)
+	}
 
 	router := newRouter(store, registry, jobsChan)
 

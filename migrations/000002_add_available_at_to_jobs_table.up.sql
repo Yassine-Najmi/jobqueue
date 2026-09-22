@@ -1,0 +1,2 @@
+ALTER TABLE jobs
+ADD COLUMN available_at TIMESTAMPTZ
