@@ -152,6 +152,24 @@ func (s *PostgresStore) MarkSuccess(id int) error {
 	return nil
 }
 
+func (s *PostgresStore) MarkFailed(id int) error {
+	query := `UPDATE jobs SET status = $1, updated_at = $2 WHERE ID = $3`
+
+	result, err := s.db.Exec(query, "failed", time.Now(), id)
+	if err != nil {
+		return fmt.Errorf("mark failed error : %w", err)
+	}
+
+	rowEffected, rowErr := result.RowsAffected()
+	if rowErr != nil {
+		return fmt.Errorf("row effected error : %w", rowErr)
+	} else if rowEffected == 0 {
+		return fmt.Errorf("update markFailed job %d : %w", id, ErrJobNotFound)
+	}
+
+	return nil
+}
+
 func (s *PostgresStore) RecordAttempt(id int) (Job, error) {
 	var job Job
 	var claimedBy sql.NullString
