@@ -10,6 +10,26 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      TEST_DB_USER: testuser
+      TEST_DB_PASSWORD: testpass
+      TEST_DB_NAME: testdb
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -18,6 +38,12 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.25'
+
+      - name: Install migrate CLI
+        run: go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+
+      - name: Run migrations
+        run: migrate -path migrations -database "postgres://testuser:testpass@localhost:5432/testdb?sslmode=disable" up
 
       - name: Run tests
         run: go test -v ./...
