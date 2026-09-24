@@ -10,6 +10,8 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
+const orphanTimeout = 30 * time.Second
+
 type PostgresStore struct {
 	db *sql.DB
 }
@@ -268,10 +270,11 @@ func (s *PostgresStore) RecoverOrphanedJobs() (int, error) {
 	WHERE  id IN (
 		SELECT id FROM jobs
 		WHERE status = 'running'
+		AND claimed_at < $2
 	)
 	RETURNING id
 	`
-	rows, err := s.db.Query(query, time.Now())
+	rows, err := s.db.Query(query, time.Now(), time.Now().Add(-orphanTimeout))
 	if err != nil {
 		return 0, fmt.Errorf("Recover orphaned jobs error : %w", err)
 	}
