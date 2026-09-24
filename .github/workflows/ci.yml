@@ -29,6 +29,7 @@ jobs:
       TEST_DB_USER: testuser
       TEST_DB_PASSWORD: testpass
       TEST_DB_NAME: testdb
+      TEST_DB_PORT: "5432"
 
     steps:
       - name: Checkout code

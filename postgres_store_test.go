@@ -16,9 +16,15 @@ func newTestPostgresStore(t *testing.T) *PostgresStore {
 
 	godotenv.Load()
 
-	connString := fmt.Sprintf("postgres://%s:%s@localhost:5433/%s?sslmode=disable",
+	port := os.Getenv("TEST_DB_PORT")
+	if port == "" {
+		port = "5433"
+	}
+
+	connString := fmt.Sprintf("postgres://%s:%s@localhost:%s/%s?sslmode=disable",
 		os.Getenv("TEST_DB_USER"),
 		os.Getenv("TEST_DB_PASSWORD"),
+		port,
 		os.Getenv("TEST_DB_NAME"),
 	)
 
