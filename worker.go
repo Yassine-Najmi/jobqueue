@@ -63,7 +63,7 @@ func worker(ctx context.Context, workerID int, jobs <-chan Job, retryJobs chan<-
 	}
 }
 
-func pgWorker(ctx context.Context, workerID int, store *PostgresStore, registry map[string]JobHandler) {
+func pgWorker(ctx context.Context, workerID int, store ClaimableStorage, registry map[string]JobHandler) {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -114,7 +114,9 @@ func pgWorker(ctx context.Context, workerID int, store *PostgresStore, registry 
 					fmt.Printf("worker %d: job %d failed permanently\n", workerID, job.ID)
 				}
 			} else {
-				store.MarkSuccess(job.ID)
+				if err := store.MarkSuccess(job.ID); err != nil {
+					fmt.Printf("worker %d: mark success error: %v\n", workerID, err)
+				}
 				fmt.Printf("worker %d: job %d succeeded\n", workerID, job.ID)
 			}
 		}
@@ -126,7 +128,7 @@ func startWorkerPool(ctx context.Context, numWorkers int, jobs chan Job, retryJo
 	for i := 0; i < numWorkers; i++ {
 		go func(workerID int) {
 			defer workerWg.Done()
-			if pgStore, ok := store.(*PostgresStore); ok {
+			if pgStore, ok := store.(ClaimableStorage); ok {
 				pgWorker(ctx, workerID, pgStore, registry)
 			} else {
 				worker(ctx, workerID, jobs, retryJobs, store, registry)

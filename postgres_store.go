@@ -114,6 +114,10 @@ func (s *PostgresStore) GetAll() ([]Job, error) {
 		jobs = append(jobs, job)
 	}
 
+	if err := rows.Err(); err != nil {
+		return jobs, fmt.Errorf("iterate recovered jobs: %w", err)
+	}
+
 	return jobs, nil
 }
 

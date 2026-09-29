@@ -30,3 +30,9 @@ type Storage interface {
 	MarkSuccess(id int) error
 	RecordAttempt(id int) (Job, error)
 }
+
+type ClaimableStorage interface {
+	Storage
+	ClaimJob(workerID string) (Job, error)
+	MarkFailed(id int) error
+}

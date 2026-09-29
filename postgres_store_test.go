@@ -176,7 +176,7 @@ func TestPostgresStoreClaimJob(t *testing.T) {
 	}
 }
 
-func TestPostgresStoreecoverOrphanedJobs(t *testing.T) {
+func TestPostgresStoreRecoverOrphanedJobs(t *testing.T) {
 	store := newTestPostgresStore(t)
 
 	jobs := make([]Job, 10)
