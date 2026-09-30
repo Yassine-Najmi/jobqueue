@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -302,4 +304,31 @@ func (s *PostgresStore) RecoverOrphanedJobs() (int, error) {
 	}
 
 	return count, nil
+}
+
+func startOrphanReaper(ctx context.Context, store *PostgresStore, interval time.Duration) {
+	recover := func() {
+		count, err := store.RecoverOrphanedJobs()
+		if err != nil {
+			log.Printf("orphan reaper error: %v", err)
+			return
+		}
+		if count > 0 {
+			log.Printf("orphan reaper recovered %d jobs", count)
+		}
+	}
+
+	recover() // run immediately, don't wait for the first tick
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			recover()
+		}
+	}
 }
