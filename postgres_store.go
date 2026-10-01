@@ -57,12 +57,13 @@ func (s *PostgresStore) Create(job Job) (Job, error) {
 func (s *PostgresStore) Get(id int) (Job, error) {
 	var job Job
 	var claimedBy sql.NullString
+	var lastError sql.NullString
 	var payloadJSON []byte
-	query := `SELECT id, type, payload, status, attempts, max_attempts, created_at, updated_at, claimed_at, claimed_by FROM jobs
+	query := `SELECT id, type, payload, status, attempts, max_attempts, created_at, updated_at, claimed_at, claimed_by, last_error FROM jobs
 	WHERE id = $1
 	`
 
-	err := s.db.QueryRow(query, id).Scan(&job.ID, &job.Type, &payloadJSON, &job.Status, &job.Attempts, &job.MaxAttempts, &job.CreatedAt, &job.UpdatedAt, &job.ClaimedAt, &claimedBy)
+	err := s.db.QueryRow(query, id).Scan(&job.ID, &job.Type, &payloadJSON, &job.Status, &job.Attempts, &job.MaxAttempts, &job.CreatedAt, &job.UpdatedAt, &job.ClaimedAt, &claimedBy, &lastError)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Job{}, fmt.Errorf("get job %v : %w", id, ErrJobNotFound)
@@ -72,6 +73,10 @@ func (s *PostgresStore) Get(id int) (Job, error) {
 
 	if claimedBy.Valid {
 		job.ClaimedBy = claimedBy.String
+	}
+
+	if lastError.Valid {
+		job.LastError = lastError.String
 	}
 
 	err = json.Unmarshal(payloadJSON, &job.Payload)
@@ -86,7 +91,7 @@ func (s *PostgresStore) Get(id int) (Job, error) {
 func (s *PostgresStore) GetAll() ([]Job, error) {
 	jobs := make([]Job, 0)
 
-	query := `SELECT id, type, payload, status, attempts, max_attempts, created_at, updated_at, claimed_at, claimed_by FROM jobs`
+	query := `SELECT id, type, payload, status, attempts, max_attempts, created_at, updated_at, claimed_at, claimed_by, last_error FROM jobs`
 
 	rows, err := s.db.Query(query)
 	if err != nil {
@@ -98,14 +103,19 @@ func (s *PostgresStore) GetAll() ([]Job, error) {
 	for rows.Next() {
 		var job Job
 		var claimedBy sql.NullString
+		var lastError sql.NullString
 		var payloadJSON []byte
 
-		if err := rows.Scan(&job.ID, &job.Type, &payloadJSON, &job.Status, &job.Attempts, &job.MaxAttempts, &job.CreatedAt, &job.UpdatedAt, &job.ClaimedAt, &claimedBy); err != nil {
+		if err := rows.Scan(&job.ID, &job.Type, &payloadJSON, &job.Status, &job.Attempts, &job.MaxAttempts, &job.CreatedAt, &job.UpdatedAt, &job.ClaimedAt, &claimedBy, &lastError); err != nil {
 			return jobs, fmt.Errorf("get all tasks : %w", err)
 		}
 
 		if claimedBy.Valid {
 			job.ClaimedBy = claimedBy.String
+		}
+
+		if lastError.Valid {
+			job.LastError = lastError.String
 		}
 
 		err := json.Unmarshal(payloadJSON, &job.Payload)
@@ -181,6 +191,7 @@ func (s *PostgresStore) MarkFailed(id int) error {
 func (s *PostgresStore) RecordAttempt(id int) (Job, error) {
 	var job Job
 	var claimedBy sql.NullString
+	var lastError sql.NullString
 	var payloadJSON []byte
 
 	query := `UPDATE jobs
@@ -197,7 +208,7 @@ func (s *PostgresStore) RecordAttempt(id int) (Job, error) {
 	WHERE id = $2
 	RETURNING *
 	`
-	err := s.db.QueryRow(query, time.Now(), id, time.Now().Add(500*time.Millisecond)).Scan(&job.ID, &job.Type, &payloadJSON, &job.Status, &job.Attempts, &job.MaxAttempts, &job.CreatedAt, &job.UpdatedAt, &job.ClaimedAt, &claimedBy, &job.AvailableAt)
+	err := s.db.QueryRow(query, time.Now(), id, time.Now().Add(500*time.Millisecond)).Scan(&job.ID, &job.Type, &payloadJSON, &job.Status, &job.Attempts, &job.MaxAttempts, &job.CreatedAt, &job.UpdatedAt, &job.ClaimedAt, &claimedBy, &job.AvailableAt, &lastError)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Job{}, fmt.Errorf("record attempt job %d : %w", id, ErrJobNotFound)
@@ -207,6 +218,10 @@ func (s *PostgresStore) RecordAttempt(id int) (Job, error) {
 
 	if claimedBy.Valid {
 		job.ClaimedBy = claimedBy.String
+	}
+
+	if lastError.Valid {
+		job.LastError = lastError.String
 	}
 
 	err = json.Unmarshal(payloadJSON, &job.Payload)
@@ -221,6 +236,7 @@ func (s *PostgresStore) ClaimJob(workerID string) (Job, error) {
 
 	var job Job
 	var claimedBy sql.NullString
+	var lastError sql.NullString
 	var payloadJSON []byte
 
 	query := `
@@ -239,7 +255,7 @@ func (s *PostgresStore) ClaimJob(workerID string) (Job, error) {
 		)
 		RETURNING *
 	`
-	err := s.db.QueryRow(query, time.Now(), time.Now(), workerID).Scan(&job.ID, &job.Type, &payloadJSON, &job.Status, &job.Attempts, &job.MaxAttempts, &job.CreatedAt, &job.UpdatedAt, &job.ClaimedAt, &claimedBy, &job.AvailableAt)
+	err := s.db.QueryRow(query, time.Now(), time.Now(), workerID).Scan(&job.ID, &job.Type, &payloadJSON, &job.Status, &job.Attempts, &job.MaxAttempts, &job.CreatedAt, &job.UpdatedAt, &job.ClaimedAt, &claimedBy, &job.AvailableAt, &lastError)
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -250,6 +266,10 @@ func (s *PostgresStore) ClaimJob(workerID string) (Job, error) {
 
 	if claimedBy.Valid {
 		job.ClaimedBy = claimedBy.String
+	}
+
+	if lastError.Valid {
+		job.LastError = lastError.String
 	}
 
 	err = json.Unmarshal(payloadJSON, &job.Payload)

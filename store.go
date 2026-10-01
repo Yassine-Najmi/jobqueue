@@ -20,6 +20,7 @@ type Job struct {
 	ClaimedAt   *time.Time     `json:"claimed_at,omitempty"`
 	ClaimedBy   string         `json:"claimed_by,omitempty"`
 	AvailableAt *time.Time     `json:"available_at,omitempty"`
+	LastError   string         `json:"last_error,omitempty"`
 }
 
 type Storage interface {
