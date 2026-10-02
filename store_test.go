@@ -66,7 +66,7 @@ func TestInMemoryStoreRecordAttempt_NoLostUpdatesUnderConcurrency(t *testing.T) 
 
 		go func() {
 			defer wg.Done()
-			store.RecordAttempt(job.ID)
+			store.RecordAttempt(job.ID, "timeout")
 		}()
 	}
 

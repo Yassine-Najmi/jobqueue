@@ -29,11 +29,11 @@ type Storage interface {
 	GetAll() ([]Job, error)
 	MarkRunning(id int) error
 	MarkSuccess(id int) error
-	RecordAttempt(id int) (Job, error)
+	RecordAttempt(id int, msg string) (Job, error)
 }
 
 type ClaimableStorage interface {
 	Storage
 	ClaimJob(workerID string) (Job, error)
-	MarkFailed(id int) error
+	MarkFailed(id int, msg string) error
 }

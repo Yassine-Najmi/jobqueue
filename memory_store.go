@@ -101,7 +101,7 @@ func (s *InMemoryStore) MarkSuccess(id int) error {
 // job goes back to "retrying" or is permanently "failed" once MaxAttempts
 // is exhausted. Returns the updated job so the caller (the worker) can act
 // on the decision without a second locked call.
-func (s *InMemoryStore) RecordAttempt(id int) (Job, error) {
+func (s *InMemoryStore) RecordAttempt(id int, lastErr string) (Job, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -117,6 +117,7 @@ func (s *InMemoryStore) RecordAttempt(id int) (Job, error) {
 		job.Status = "failed"
 	}
 	job.UpdatedAt = time.Now()
+	job.LastError = lastErr
 	s.jobs[id] = job
 
 	return job, nil

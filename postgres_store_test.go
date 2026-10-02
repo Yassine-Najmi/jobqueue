@@ -95,6 +95,31 @@ func TestPostgresStoreGet(t *testing.T) {
 	})
 }
 
+func TestPostgresStoreGetAll(t *testing.T) {
+	store := newTestPostgresStore(t)
+
+	jobs := make([]Job, 10)
+	job := Job{
+		Type:        "email",
+		Payload:     map[string]any{"to": "user@example.com"},
+		MaxAttempts: 3,
+	}
+
+	for i := 0; i < 10; i++ {
+		j, _ := store.Create(job)
+		jobs[i] = j
+	}
+
+	allJobs, err := store.GetAll()
+	if err != nil {
+		t.Fatalf("expected no error, got : %v", err)
+	}
+
+	if len(allJobs) != 10 {
+		t.Fatalf("expected jobs length 10, got : %d", len(allJobs))
+	}
+}
+
 func TestPostgresStoreMarkFailed(t *testing.T) {
 	store := newTestPostgresStore(t)
 
@@ -104,15 +129,18 @@ func TestPostgresStoreMarkFailed(t *testing.T) {
 		MaxAttempts: 3,
 	}
 
-	job, _ = store.Create(job)
-	err := store.MarkFailed(job.ID)
+	job, err := store.Create(job)
+	err = store.MarkFailed(job.ID, "bad payload")
 	if err != nil {
 		t.Fatalf("expected no error, got : %v", err)
 	}
-	job, _ = store.Get(job.ID)
 
-	if job.Status != "failed" {
-		t.Fatalf("expected status of the job failed, got status: %v", job.Status)
+	got, _ := store.Get(job.ID)
+	if got.Status != "failed" {
+		t.Fatalf("expected status failed, got : %v", got.Status)
+	}
+	if got.LastError != "bad payload" {
+		t.Fatalf("expected last_error 'bad payload', got : %q", got.LastError)
 	}
 }
 
@@ -124,8 +152,12 @@ func TestPostgresStoreRecordAttempt(t *testing.T) {
 		Payload:     map[string]any{"to": "user@example.com"},
 		MaxAttempts: 3,
 	}
-	job, _ = store.Create(job)
-	job, err := store.RecordAttempt(job.ID)
+	job, err := store.Create(job)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	job, err = store.RecordAttempt(job.ID, "timeout")
 	if err != nil {
 		t.Fatalf("expected no error, got : %v", err)
 	}
@@ -133,19 +165,20 @@ func TestPostgresStoreRecordAttempt(t *testing.T) {
 	if job.Attempts != 1 {
 		t.Fatalf("expected attempts 1, got : %d", job.Attempts)
 	}
-
 	if job.Status != "retrying" {
 		t.Fatalf("expected status retrying, got : %d", job.Attempts)
 	}
+	if job.LastError != "timeout" {
+		t.Fatalf("expected last_error 'timeout', got : %q", job.LastError)
+	}
 
 	for attmpt := 1; attmpt <= job.MaxAttempts; attmpt++ {
-		job, _ = store.RecordAttempt(job.ID)
+		job, _ = store.RecordAttempt(job.ID, "timeout")
 	}
 
 	if job.Attempts != job.MaxAttempts {
 		t.Fatalf("expected attempts %d, got : %d", job.MaxAttempts, job.Attempts)
 	}
-
 	if job.Status != "failed" {
 		t.Fatalf("expected status failed, got : %v", job.Status)
 	}

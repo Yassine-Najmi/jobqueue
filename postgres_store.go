@@ -170,10 +170,10 @@ func (s *PostgresStore) MarkSuccess(id int) error {
 	return nil
 }
 
-func (s *PostgresStore) MarkFailed(id int) error {
-	query := `UPDATE jobs SET status = $1, updated_at = $2 WHERE ID = $3`
+func (s *PostgresStore) MarkFailed(id int, lastErr string) error {
+	query := `UPDATE jobs SET status = $1, updated_at = $2, last_error = $3 WHERE ID = $4`
 
-	result, err := s.db.Exec(query, "failed", time.Now(), id)
+	result, err := s.db.Exec(query, "failed", time.Now(), lastErr, id)
 	if err != nil {
 		return fmt.Errorf("mark failed error : %w", err)
 	}
@@ -188,7 +188,7 @@ func (s *PostgresStore) MarkFailed(id int) error {
 	return nil
 }
 
-func (s *PostgresStore) RecordAttempt(id int) (Job, error) {
+func (s *PostgresStore) RecordAttempt(id int, lastErr string) (Job, error) {
 	var job Job
 	var claimedBy sql.NullString
 	var lastError sql.NullString
@@ -204,11 +204,12 @@ func (s *PostgresStore) RecordAttempt(id int) (Job, error) {
 	ELSE 'retrying'
 	END,
 	updated_at = $1,
-	available_at = $3
-	WHERE id = $2
+	available_at = $2,
+	last_error = $3
+	WHERE id = $4
 	RETURNING *
 	`
-	err := s.db.QueryRow(query, time.Now(), id, time.Now().Add(500*time.Millisecond)).Scan(&job.ID, &job.Type, &payloadJSON, &job.Status, &job.Attempts, &job.MaxAttempts, &job.CreatedAt, &job.UpdatedAt, &job.ClaimedAt, &claimedBy, &job.AvailableAt, &lastError)
+	err := s.db.QueryRow(query, time.Now(), time.Now().Add(500*time.Millisecond), lastErr, id).Scan(&job.ID, &job.Type, &payloadJSON, &job.Status, &job.Attempts, &job.MaxAttempts, &job.CreatedAt, &job.UpdatedAt, &job.ClaimedAt, &claimedBy, &job.AvailableAt, &lastError)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Job{}, fmt.Errorf("record attempt job %d : %w", id, ErrJobNotFound)

@@ -32,7 +32,7 @@ func worker(ctx context.Context, workerID int, jobs <-chan Job, retryJobs chan<-
 			err := handler.Handle(job)
 
 			if err != nil {
-				recordJob, recordErr := store.RecordAttempt(job.ID)
+				recordJob, recordErr := store.RecordAttempt(job.ID, err.Error())
 				if recordErr != nil {
 					fmt.Printf("worker %d: %v\n", workerID, recordErr)
 					continue
@@ -87,7 +87,7 @@ func pgWorker(ctx context.Context, workerID int, store ClaimableStorage, registr
 			handler, ok := registry[job.Type]
 			if !ok {
 				log.Printf("key doesn't exist")
-				err := store.MarkFailed(job.ID)
+				err := store.MarkFailed(job.ID, fmt.Sprintf("no handler for type %q", job.Type))
 				if err != nil {
 					if errors.Is(err, ErrJobNotFound) {
 						continue
@@ -102,7 +102,7 @@ func pgWorker(ctx context.Context, workerID int, store ClaimableStorage, registr
 			err = handler.Handle(job)
 
 			if err != nil {
-				recordJob, recordErr := store.RecordAttempt(job.ID)
+				recordJob, recordErr := store.RecordAttempt(job.ID, err.Error())
 				if recordErr != nil {
 					fmt.Printf("worker %d: %v\n", workerID, recordErr)
 					continue
