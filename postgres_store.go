@@ -293,15 +293,17 @@ func (s *PostgresStore) RecoverOrphanedJobs() (int, error) {
 	WHEN attempts >= max_attempts THEN 'failed'
 	ELSE 'retrying'
 	END,
-	updated_at = $1
+	updated_at = $1,
+	last_error = $2
 	WHERE  id IN (
 		SELECT id FROM jobs
 		WHERE status = 'running'
-		AND claimed_at < $2
+		AND claimed_at < $3
 	)
 	RETURNING id
 	`
-	rows, err := s.db.Query(query, time.Now(), time.Now().Add(-orphanTimeout))
+	lastError := fmt.Sprintf("orphaned: no completion within %s", orphanTimeout)
+	rows, err := s.db.Query(query, time.Now(), lastError, time.Now().Add(-orphanTimeout))
 	if err != nil {
 		return 0, fmt.Errorf("Recover orphaned jobs error : %w", err)
 	}

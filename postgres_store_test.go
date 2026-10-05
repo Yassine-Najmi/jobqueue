@@ -130,6 +130,10 @@ func TestPostgresStoreMarkFailed(t *testing.T) {
 	}
 
 	job, err := store.Create(job)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
 	err = store.MarkFailed(job.ID, "bad payload")
 	if err != nil {
 		t.Fatalf("expected no error, got : %v", err)
@@ -172,7 +176,7 @@ func TestPostgresStoreRecordAttempt(t *testing.T) {
 		t.Fatalf("expected last_error 'timeout', got : %q", job.LastError)
 	}
 
-	for attmpt := 1; attmpt <= job.MaxAttempts; attmpt++ {
+	for attmpt := 0; attmpt < job.MaxAttempts; attmpt++ {
 		job, _ = store.RecordAttempt(job.ID, "timeout")
 	}
 
@@ -212,7 +216,6 @@ func TestPostgresStoreClaimJob(t *testing.T) {
 func TestPostgresStoreRecoverOrphanedJobs(t *testing.T) {
 	store := newTestPostgresStore(t)
 
-	jobs := make([]Job, 10)
 	job := Job{
 		Type:        "email",
 		Payload:     map[string]any{"to": "user@example.com"},
@@ -220,11 +223,21 @@ func TestPostgresStoreRecoverOrphanedJobs(t *testing.T) {
 	}
 
 	for i := 0; i < 10; i++ {
-		j, _ := store.Create(job)
-		j, _ = store.ClaimJob(strconv.Itoa(i))
+		j, err := store.Create(job)
+		if err != nil {
+			t.Fatalf("create job: %v", err)
+		}
+
+		j, err = store.ClaimJob(strconv.Itoa(i))
+		if err != nil {
+			t.Fatalf("claim job: %v", err)
+		}
+
 		pastTime := time.Now().Add(-orphanTimeout - time.Second)
-		store.db.Exec(`UPDATE jobs SET claimed_at = $1 WHERE id = $2`, pastTime, j.ID)
-		jobs[i] = j
+		_, err = store.db.Exec(`UPDATE jobs SET claimed_at = $1 WHERE id = $2`, pastTime, j.ID)
+		if err != nil {
+			t.Fatalf("backdate claimed_at for job %d: %v", j.ID, err)
+		}
 	}
 
 	count, err := store.RecoverOrphanedJobs()
@@ -245,6 +258,10 @@ func TestPostgresStoreRecoverOrphanedJobs(t *testing.T) {
 
 		if getJob.Attempts != 1 {
 			t.Fatalf("expected attempts 1, got : %d", getJob.Attempts)
+		}
+
+		if getJob.LastError != fmt.Sprintf("orphaned: no completion within %s", orphanTimeout) {
+			t.Fatalf("expected orphaned error , got : %v", getJob.LastError)
 		}
 	}
 }
