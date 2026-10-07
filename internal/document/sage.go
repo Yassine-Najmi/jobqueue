@@ -39,16 +39,16 @@ func ParseSage(raw string) (Document, error) {
 		}
 	}
 
-	get := func(row []string, name string) string {
-		i, ok := col[name]
-		if !ok || i >= len(row) {
-			return ""
-		}
-		return strings.TrimSpace(row[i])
-	}
+	// get := func(row []string, name string) string {
+	// 	i, ok := col[name]
+	// 	if !ok || i >= len(row) {
+	// 		return ""
+	// 	}
+	// 	return strings.TrimSpace(row[i])
+	// }
 
-	rows := records[1:]
-	first := rows[0]
+	// rows := records[1:]
+	// first := rows[0]
 
 	return Document{}, nil
 }
