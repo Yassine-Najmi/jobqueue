@@ -1,25 +1,28 @@
 package document
 
 import (
+	"errors"
 	"time"
 
 	"github.com/shopspring/decimal"
 )
 
+var ErrInvalidDocument = errors.New("invalid document")
+
 type Document struct {
-	Reference     string    // doc number (Sage DO_Piece); Sellsy "ident"
+	Reference     string    // doc number
 	Date          time.Time // document date;
-	DisplayedDate time.Time // date sent to Sellsy on validate/updateFields
-	Tags          []string  // source tags; the Sellsy handler adds Reference itself for dedup
+	DisplayedDate time.Time // delivery date
+	Tags          []string  // source tags;
 
 	Client      Client
-	ShipAddress Address // can differ from the client's address
+	ShipAddress Address
 
 	LineItems []LineItem
 
-	LinkedEstimates  []string // estimates to set "accepted" (from DL_PieceDE)
-	LinkedOrders     []string // orders to set "invoiced" (from DL_PieceBC)
-	LinkedDeliveries []string // deliveries to set "invoiced" (from DL_PieceBL)
+	LinkedEstimates  []string
+	LinkedOrders     []string
+	LinkedDeliveries []string
 }
 
 type ClientKind string
@@ -30,11 +33,11 @@ const (
 )
 
 type Client struct {
-	Code  string     // CT_Num; used for the client lookup
-	Kind  ClientKind // chooses Client.getList vs Prospects.getList
-	Name  string     // used in the document subject
-	Email string     // unused for now, left blank
-	Phone string     // unused for now, left blank
+	Code  string // ERP client number
+	Kind  ClientKind
+	Name  string
+	Email string
+	Phone string
 }
 
 type Address struct {
@@ -42,7 +45,7 @@ type Address struct {
 	Part1       string
 	Zip         string
 	Town        string
-	CountryCode string // defaulted to "FR" when the source has none
+	CountryCode string // ISO alpha-2
 }
 
 type LineKind string
@@ -55,11 +58,17 @@ const (
 
 type LineItem struct {
 	Kind           LineKind
-	ProductRef     string          // AR_Ref; used for the Sellsy product lookup
-	Description    string          // DL_Design; product name/notes
-	Comment        string          // only for LineComment
-	Quantity       decimal.Decimal // fractional
-	UnitAmount     decimal.Decimal // computed as total HT / quantity
-	TaxRate        decimal.Decimal // matched against Sellsy's tax map
+	ProductRef     string
+	Description    string
+	Comment        string
+	Quantity       decimal.Decimal
+	UnitAmount     decimal.Decimal // total HT / quantity, 6 decimals
+	TaxRate        decimal.Decimal // percent, e.g. 20
 	PurchaseAmount decimal.Decimal
+}
+
+type ParseFunc func(raw string) (Document, error)
+
+var Parsers = map[string]ParseFunc{
+	"sage": ParseSage,
 }
