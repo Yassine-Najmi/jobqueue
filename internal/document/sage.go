@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"strings"
+	"time"
 )
 
 const sageMissingDate = "01/01/1753"
@@ -39,18 +40,98 @@ func ParseSage(raw string) (Document, error) {
 		}
 	}
 
-	// get := func(row []string, name string) string {
-	// 	i, ok := col[name]
-	// 	if !ok || i >= len(row) {
-	// 		return ""
-	// 	}
-	// 	return strings.TrimSpace(row[i])
-	// }
+	get := func(row []string, name string) string {
+		i, ok := col[name]
+		if !ok || i >= len(row) {
+			return ""
+		}
+		return strings.TrimSpace(row[i])
+	}
 
-	// rows := records[1:]
-	// first := rows[0]
+	rows := records[1:]
+	first := rows[0]
+
+	doc, err := sageHeader(first, get)
+	if err != nil {
+		return Document{}, nil
+	}
+
+	fmt.Print(doc)
 
 	return Document{}, nil
+}
+
+type getter func(row []string, name string) string
+
+func sageHeader(row []string, get getter) (Document, error) {
+	doc := Document{Reference: get(row, "Do_Piece")}
+	if doc.Reference == "" {
+		return Document{}, invalidf("empty DO_Piece")
+	}
+
+	var err error
+	if doc.Date, err = parseSageDate(get(row, "DO_Date")); err != nil {
+		return Document{}, invalidf("DO_Date: %v", err)
+	}
+	if doc.Date.IsZero() {
+		return Document{}, invalidf("DO_Date is empty")
+	}
+
+	if doc.DisplayedDate, err = parseSageDate(get(row, "DO_DateLivr")); err != nil {
+		return Document{}, invalidf("DO_DateLivr: %v", err)
+	}
+	if doc.DisplayedDate.IsZero() {
+		doc.DisplayedDate = doc.Date
+	}
+
+	var kind ClientKind
+	switch t := get(row, "CT_Type"); t {
+	case "0":
+		kind = ClientCustomer
+	case "1":
+		kind = ClientProspect
+	default:
+		return Document{}, invalidf("unknown CT_Type %q", t)
+	}
+
+	doc.Client = Client{
+		Code: get(row, "CT_Num"),
+		Kind: kind,
+		Name: get(row, "CT_Intitule"),
+		// Email: ,
+		// Phone: ,
+	}
+	if doc.Client.Code == "" {
+		return Document{}, invalidf("empty CT_Num")
+	}
+
+	doc.ShipAddress = Address{
+		Name:        doc.Client.Name,
+		Part1:       get(row, "CT_Adresse"),
+		Zip:         get(row, "CT_CodePostal"),
+		Town:        get(row, "CT_Ville"),
+		CountryCode: "FR",
+	}
+
+	return doc, nil
+}
+
+// parseSageDate reads "dd/mm/yyyy[ hh:mm:ss]".
+// Empty or 01/01/1753 gives the zero time (absent)
+func parseSageDate(s string) (time.Time, error) {
+	if s == "" || strings.HasPrefix(s, sageMissingDate) {
+		return time.Time{}, nil
+	}
+
+	if len(s) < 10 {
+		return time.Time{}, fmt.Errorf("bad date %q", s)
+	}
+
+	t, err := time.Parse("02/01/2006", s[:10]) // time.Parse returns UTC
+	if err != nil {
+		return time.Time{}, fmt.Errorf("bad date %q", s)
+	}
+	return t, nil
 }
 
 func invalidf(format string, args ...any) error {
