@@ -55,7 +55,7 @@ func ParseSage(raw string) (Document, error) {
 
 	doc, err := sageHeader(first, get)
 	if err != nil {
-		return Document{}, nil
+		return Document{}, err
 	}
 
 	seen := make(map[string]bool)
@@ -88,7 +88,7 @@ func ParseSage(raw string) (Document, error) {
 type getter func(row []string, name string) string
 
 func sageHeader(row []string, get getter) (Document, error) {
-	doc := Document{Reference: get(row, "Do_Piece")}
+	doc := Document{Reference: get(row, "DO_Piece")}
 	if doc.Reference == "" {
 		return Document{}, invalidf("empty DO_Piece")
 	}
