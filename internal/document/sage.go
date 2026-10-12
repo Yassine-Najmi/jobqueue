@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 const sageMissingDate = "01/01/1753"
@@ -56,9 +58,27 @@ func ParseSage(raw string) (Document, error) {
 		return Document{}, nil
 	}
 
-	fmt.Print(doc)
+	seen := make(map[string]bool)
+	for n, row := range rows {
+		rowNo := n + 1
+		if p := get(row, "DO_Piece"); p != doc.Reference {
+			return Document{}, invalidf("row %d belongs to document %q, expected %q", rowNo, p, doc.Reference)
+		}
 
-	return Document{}, nil
+		key := get(row, "AR_Ref") + "_" + get(row, "DL_Ligne")
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+
+		item, err := sageLine(row, get)
+		if err != nil {
+			return Document{}, invalidf("row %d: %v", rowNo, err)
+		}
+		doc.LineItems = append(doc.LineItems, item)
+	}
+
+	return doc, nil
 }
 
 type getter func(row []string, name string) string
@@ -116,6 +136,51 @@ func sageHeader(row []string, get getter) (Document, error) {
 	return doc, nil
 }
 
+// sageLine classifies one row. The rule mirrors the ERP's own convention:
+// no product reference + no text = spacer, no reference + text = comment.
+func sageLine(row []string, get getter) (LineItem, error) {
+	ref, design := get(row, "AR_Ref"), get(row, "DL_Design")
+	switch {
+	case ref == "" && design == "":
+		return LineItem{Kind: LineEmpty}, nil
+	case ref == "":
+		return LineItem{Kind: LineComment, Comment: design}, nil
+	}
+
+	qty, err := parseSageDecimal(get(row, "DL_Qte"))
+	if err != nil {
+		return LineItem{}, fmt.Errorf("DL_Qte: %w", err)
+	}
+	total, err := parseSageDecimal(get(row, "DL_MontantHT"))
+	if err != nil {
+		return LineItem{}, fmt.Errorf("DL_MontantHT: %w", err)
+	}
+	tax, err := parseSageDecimal(get(row, "DL_Taxe1"))
+	if err != nil {
+		return LineItem{}, fmt.Errorf("DL_Taxe1: %w", err)
+	}
+	purchase, err := parseSageDecimal(get(row, "AR_PrixAch"))
+	if err != nil {
+		return LineItem{}, fmt.Errorf("AR_PrixAch: %w", err)
+	}
+
+	// Sage stores the line total
+	unit := decimal.Zero
+	if !qty.IsZero() {
+		unit = total.DivRound(qty, 6)
+	}
+
+	return LineItem{
+		Kind:           LineProduct,
+		ProductRef:     ref,
+		Description:    design,
+		Quantity:       qty,
+		UnitAmount:     unit,
+		TaxRate:        tax,
+		PurchaseAmount: purchase,
+	}, nil
+}
+
 // parseSageDate reads "dd/mm/yyyy[ hh:mm:ss]".
 // Empty or 01/01/1753 gives the zero time (absent)
 func parseSageDate(s string) (time.Time, error) {
@@ -132,6 +197,17 @@ func parseSageDate(s string) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("bad date %q", s)
 	}
 	return t, nil
+}
+
+func parseSageDecimal(s string) (decimal.Decimal, error) {
+	if s == "" {
+		return decimal.Zero, nil
+	}
+	d, err := decimal.NewFromString(strings.Replace(s, ",", ".", 1))
+	if err != nil {
+		return decimal.Zero, fmt.Errorf("bad number %q", s)
+	}
+	return d, nil
 }
 
 func invalidf(format string, args ...any) error {
