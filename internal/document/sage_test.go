@@ -107,8 +107,8 @@ func TestParseSage_ProspectAndLFLineEndings(t *testing.T) {
 func TestParseSage_DuplicateColumnsLastWins(t *testing.T) {
 	// DO_DateLivr appears twice: first = 1753 sentinel, last = real date.
 	// A product row must therefore expose the LAST one. Make it the first data row.
-	lines := strings.Split(loadFixture(t), "\r\n")
-	csv := strings.Join([]string{lines[0], lines[2]}, "\r\n") // header + P100 row only
+	lines := strings.Split(loadFixture(t), "\n")
+	csv := strings.Join([]string{lines[0], lines[2]}, "\n") // header + P100 row only
 	doc, err := ParseSage(csv)
 	if err != nil {
 		t.Fatal(err)
