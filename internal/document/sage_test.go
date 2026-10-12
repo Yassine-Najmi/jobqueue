@@ -15,7 +15,7 @@ func loadFixture(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return string(b)
+	return strings.ReplaceAll(string(b), "\r\n", "\n")
 }
 
 func TestParseSage_Fixture(t *testing.T) {
@@ -92,8 +92,8 @@ func check(t *testing.T, name, got, want string) {
 	}
 }
 
-func TestParseSage_ProspectAndLFLineEndings(t *testing.T) {
-	csv := strings.ReplaceAll(loadFixture(t), "\r\n", "\n")
+func TestParseSage_ProspectAndCRLFLineEndings(t *testing.T) {
+	csv := strings.ReplaceAll(loadFixture(t), "\n", "\r\n") // real Sage exports are CRLF
 	csv = strings.ReplaceAll(csv, ";ACME CHEMINEES;0;", ";ACME CHEMINEES;1;")
 	doc, err := ParseSage(csv)
 	if err != nil {
@@ -121,7 +121,7 @@ func TestParseSage_DuplicateColumnsLastWins(t *testing.T) {
 
 func TestParseSage_Errors(t *testing.T) {
 	good := loadFixture(t)
-	lines := strings.Split(good, "\r\n")
+	lines := strings.Split(good, "\n")
 
 	tests := []struct {
 		name string
@@ -157,5 +157,19 @@ func TestParsersRegistry(t *testing.T) {
 	}
 	if _, ok := Parsers["nope"]; ok {
 		t.Fatal("unexpected parser")
+	}
+}
+
+func TestParseSage_CRLFAndLF(t *testing.T) {
+	lf := loadFixture(t)
+	crlf := strings.ReplaceAll(lf, "\n", "\r\n")
+	for name, in := range map[string]string{"lf": lf, "crlf": crlf} {
+		doc, err := ParseSage(in)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if len(doc.LineItems) != 5 {
+			t.Errorf("%s: %d items, want 5", name, len(doc.LineItems))
+		}
 	}
 }
