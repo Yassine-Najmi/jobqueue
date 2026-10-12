@@ -76,6 +76,10 @@ func ParseSage(raw string) (Document, error) {
 			return Document{}, invalidf("row %d: %v", rowNo, err)
 		}
 		doc.LineItems = append(doc.LineItems, item)
+
+		doc.LinkedEstimates = appendUnique(doc.LinkedEstimates, get(row, "DL_PieceDE"))
+		doc.LinkedOrders = appendUnique(doc.LinkedOrders, get(row, "DL_PieceBC"))
+		doc.LinkedDeliveries = appendUnique(doc.LinkedDeliveries, get(row, "DL_PieceBL"))
 	}
 
 	return doc, nil
@@ -208,6 +212,18 @@ func parseSageDecimal(s string) (decimal.Decimal, error) {
 		return decimal.Zero, fmt.Errorf("bad number %q", s)
 	}
 	return d, nil
+}
+
+func appendUnique(list []string, v string) []string {
+	if v == "" {
+		return list
+	}
+	for _, x := range list {
+		if x == v {
+			return list
+		}
+	}
+	return append(list, v)
 }
 
 func invalidf(format string, args ...any) error {
